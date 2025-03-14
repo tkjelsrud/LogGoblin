@@ -1,0 +1,9 @@
+{
+    "jsonBinBucketID": "your-bucket-id-here",
+    "jsonBinAPIKey": "your-master-key-here",
+    "jsonBinAccessKey": "your-access-key-here",
+    "jsonBinVersioning": false,
+    "logFiles": [
+      "./test.log"
+    ]
+  }

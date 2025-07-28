@@ -20,12 +20,15 @@ type Config struct {
 	JSONBinAccessKey  string   `json:"jsonBinAccessKey"`
 	JSONBinVersioning bool     `json:"jsonBinVersioning"`
 	LogFiles          []string `json:"logFiles"`
+	MatchPattern      string   `json:"matchPattern"`
+	ContextLines      int      `json:"contextLines"`
 }
 
 // Log entry struct
 type LogEntry struct {
 	Timestamp string `json:"timestamp"`
 	Message   string `json:"message"`
+	Filename  string `json:"filename"`
 }
 
 // Global variables
@@ -58,7 +61,7 @@ func main() {
 	// Main loop: Check logs every few seconds
 	for {
 		for _, file := range config.LogFiles {
-			processLog(file)
+			processLog(file, config.MatchPattern, config.ContextLines)
 		}
 		time.Sleep(checkInterval)
 	}
@@ -82,8 +85,7 @@ func loadConfig() error {
 	return nil
 }
 
-// Read log file from last position and find errors
-func processLog(filePath string) {
+func processLog(filePath string, pattern string, contextLines int) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		fmt.Println("Error opening file:", err)
@@ -91,13 +93,15 @@ func processLog(filePath string) {
 	}
 	defer file.Close()
 
-	// Get last read position (or start from 0)
-	lastPos, exists := filePositions[filePath]
-	if !exists {
-		lastPos = 0
+	errorPattern, err := regexp.Compile(pattern)
+	if err != nil {
+		fmt.Println("Invalid regex pattern:", err)
+		return
 	}
 
-	// Get current file size
+	lastPos, exists := filePositions[filePath]
+	fmt.Printf("exists=%v, lastPos=%d\n", exists, lastPos)
+
 	fileInfo, err := file.Stat()
 	if err != nil {
 		fmt.Println("Error getting file info:", err)
@@ -105,12 +109,15 @@ func processLog(filePath string) {
 	}
 	currentSize := fileInfo.Size()
 
-	// Handle log rotation (if file was truncated, start over)
 	if lastPos > currentSize {
-		lastPos = 0
+		lastPos = 0 // loggrotasjon
 	}
 
-	// Move to last known position
+	if !exists || lastPos == 0 {
+		lastPos = findLastNLinesOffset(file, 100)
+		fmt.Printf("First read: jumping to last 100 lines (offset %d)\n", lastPos)
+	}
+
 	_, err = file.Seek(lastPos, io.SeekStart)
 	if err != nil {
 		fmt.Println("Error seeking in file:", err)
@@ -118,7 +125,6 @@ func processLog(filePath string) {
 	}
 
 	reader := bufio.NewReader(file)
-	errorPattern := regexp.MustCompile(`(?i)ERROR`) // Case-insensitive match
 
 	for {
 		line, err := reader.ReadString('\n')
@@ -129,20 +135,76 @@ func processLog(filePath string) {
 			fmt.Println("Error reading file:", err)
 			return
 		}
+
 		if errorPattern.MatchString(line) {
+			var buffer bytes.Buffer
+			buffer.WriteString(line)
+
+			// Legg til N ekstra linjer
+			for i := 0; i < contextLines; i++ {
+				extraLine, err := reader.ReadString('\n')
+				if err != nil {
+					break
+				}
+				buffer.WriteString(extraLine)
+			}
+
 			logEntry := LogEntry{
 				Timestamp: time.Now().Format(time.RFC3339),
-				Message:   line,
+				Message:   buffer.String(),
+				Filename:  filePath,
 			}
 			queueMutex.Lock()
-			logQueue = append(logQueue, logEntry) // Add to queue
+			logQueue = append(logQueue, logEntry)
 			queueMutex.Unlock()
+			fmt.Printf("Matched: %s", line) // Debug
 		}
 	}
 
-	// Update last read position
 	newPos, _ := file.Seek(0, io.SeekCurrent)
 	filePositions[filePath] = newPos
+}
+
+// Hjelpefunksjon for å finne startposisjon slik at vi får ca N siste linjer
+func findLastNLinesOffset(file *os.File, n int) int64 {
+	const chunkSize = 4096
+	stat, _ := file.Stat()
+	size := stat.Size()
+	var offset int64
+	var lines int
+	var buf []byte
+
+	for {
+		if size-int64(chunkSize) < 0 {
+			offset = 0
+		} else {
+			offset = size - int64(chunkSize)
+		}
+
+		buf = make([]byte, size-offset)
+		_, err := file.ReadAt(buf, offset)
+		if err != nil && err != io.EOF {
+			return 0 // fallback til start hvis lesefeil
+		}
+
+		lines = bytes.Count(buf, []byte{'\n'})
+		if lines >= n || offset == 0 {
+			break
+		}
+		size = offset
+	}
+
+	// Nå har buf siste chunk med minst N linjer (eller hele fila)
+	idx := len(buf)
+	for i := 0; i < n; i++ {
+		prevIdx := bytes.LastIndex(buf[:idx], []byte{'\n'})
+		if prevIdx == -1 {
+			return offset // færre enn N linjer i hele fila
+		}
+		idx = prevIdx
+	}
+
+	return offset + int64(idx+1)
 }
 
 // Background function to send logs in batches
@@ -165,8 +227,44 @@ func batchSender() {
 	}
 }
 
+func fetchExistingLogs() []LogEntry {
+	jsonBinEndpoint := fmt.Sprintf(jsonBinURL, config.JSONBinBucketID)
+
+	req, err := http.NewRequest("GET", jsonBinEndpoint, nil)
+	if err != nil {
+		fmt.Println("Error creating GET request:", err)
+		return nil
+	}
+
+	// Add authentication headers
+	req.Header.Set("X-Master-Key", config.JSONBinAPIKey)
+	req.Header.Set("X-Access-Key", config.JSONBinAccessKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error fetching logs from JSONBin:", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	// JSONBin wraps data inside "record", so we need a struct to match
+	var response struct {
+		Record []LogEntry `json:"record"`
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&response)
+	if err != nil {
+		fmt.Println("Error decoding JSON response:", err)
+		return nil
+	}
+
+	return response.Record // Return only the log entries
+}
+
 // Send batched log entries to JSONBin with authentication headers
 func sendToJSONBin(entries []LogEntry) {
+	// Send kun nye entries
 	data, err := json.Marshal(entries)
 	if err != nil {
 		fmt.Println("Error encoding JSON:", err)
@@ -174,13 +272,12 @@ func sendToJSONBin(entries []LogEntry) {
 	}
 
 	jsonBinEndpoint := fmt.Sprintf(jsonBinURL, config.JSONBinBucketID)
-	req, err := http.NewRequest("POST", jsonBinEndpoint, bytes.NewBuffer(data))
+	req, err := http.NewRequest("PUT", jsonBinEndpoint, bytes.NewBuffer(data))
 	if err != nil {
 		fmt.Println("Error creating request:", err)
 		return
 	}
 
-	// Add authentication headers
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("X-Master-Key", config.JSONBinAPIKey)
 	req.Header.Set("X-Access-Key", config.JSONBinAccessKey)
@@ -196,5 +293,5 @@ func sendToJSONBin(entries []LogEntry) {
 	}
 	defer resp.Body.Close()
 
-	fmt.Printf("Sent %d log entries to JSONBin: %s\n", len(entries), resp.Status)
+	fmt.Printf("Updated JSONBin with %d new entries. HTTP Status: %s\n", len(entries), resp.Status)
 }

@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Log Viewer</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #eee; }
+    input { margin: 5px; }
+    pre { background: #222; padding: 10px; max-height: 70vh; overflow-y: scroll; }
+  </style>
+</head>
+<body>
+  <h1>Log Viewer</h1>
+
+  <div>
+    <label>Bucket ID:</label>
+    <input type="text" id="bucketID" placeholder="Enter JSONbin bucket ID">
+    <br>
+    <label>Access Key:</label>
+    <input type="password" id="accessKey" placeholder="Enter JSONbin Access Key">
+    <br>
+    <button onclick="saveConfig()">Save Config</button>
+    <button onclick="clearConfig()">Clear Config</button>
+  </div>
+
+  <hr>
+
+  <pre id="log">Loading logs...</pre>
+
+  <script>
+    function saveConfig() {
+      localStorage.setItem("bucketID", document.getElementById("bucketID").value);
+      localStorage.setItem("accessKey", document.getElementById("accessKey").value);
+      loadLogs();
+    }
+
+    function clearConfig() {
+      localStorage.removeItem("bucketID");
+      localStorage.removeItem("accessKey");
+      document.getElementById("log").textContent = "Configuration cleared.";
+    }
+
+    async function loadLogs() {
+      const bucketID = localStorage.getItem("bucketID");
+      const accessKey = localStorage.getItem("accessKey");
+
+      if (!bucketID || !accessKey) {
+        document.getElementById("log").textContent = "Please enter and save Bucket ID and Access Key.";
+        return;
+      }
+
+      try {
+        const res = await fetch(`https://api.jsonbin.io/v3/b/${bucketID}/latest`, {
+          headers: {
+            "X-Access-Key": accessKey
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error("Request failed: " + res.status);
+        }
+
+        const data = await res.json();
+        const logs = data.record;
+
+        if (!logs || logs.length === 0) {
+          document.getElementById("log").textContent = "No logs found.";
+          return;
+        }
+
+        document.getElementById("log").textContent = logs
+          .map(l => `[${l.timestamp}] ${l.filename}: ${l.message}`)
+          .join("\n");
+      } catch (e) {
+        document.getElementById("log").textContent = "Error fetching logs: " + e.message;
+      }
+    }
+
+    // Initial load + refresh hvert 15. sekund
+    loadLogs();
+    setInterval(loadLogs, 15000);
+  </script>
+</body>
+</html>

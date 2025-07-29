@@ -8,7 +8,9 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -20,6 +22,8 @@ type Config struct {
 	JSONBinAccessKey  string   `json:"jsonBinAccessKey"`
 	JSONBinVersioning bool     `json:"jsonBinVersioning"`
 	LogFiles          []string `json:"logFiles"`
+	LogDirs           []string `json:"logDirs"`
+	FindNewestInDirs  bool     `json:"findNewestInDirs"`
 	MatchPattern      string   `json:"matchPattern"`
 	ContextLines      int      `json:"contextLines"`
 }
@@ -53,16 +57,28 @@ func main() {
 		return
 	}
 
-	// Start background process for batch sending
-	go batchSender()
+	go batchSender() // sender til JSONBin i bakgrunnen
 
-	fmt.Println("Monitoring log files:", config.LogFiles)
+	fmt.Println("Monitoring log files:", config.LogFiles, "and directories:", config.LogDirs)
 
-	// Main loop: Check logs every few seconds
 	for {
+		// Eksakte filer
 		for _, file := range config.LogFiles {
 			processLog(file, config.MatchPattern, config.ContextLines)
 		}
+
+		// Mapper med søk etter nyeste
+		if config.FindNewestInDirs {
+			for _, dir := range config.LogDirs {
+				filePath, err := newestLogFile(dir)
+				if err != nil {
+					fmt.Println("Error finding newest log in", dir, ":", err)
+					continue
+				}
+				processLog(filePath, config.MatchPattern, config.ContextLines)
+			}
+		}
+
 		time.Sleep(checkInterval)
 	}
 }
@@ -100,7 +116,7 @@ func processLog(filePath string, pattern string, contextLines int) {
 	}
 
 	lastPos, exists := filePositions[filePath]
-	fmt.Printf("exists=%v, lastPos=%d\n", exists, lastPos)
+	fmt.Printf("%v %v, lastPos=%d\n", filePath, exists, lastPos)
 
 	fileInfo, err := file.Stat()
 	if err != nil {
@@ -163,6 +179,37 @@ func processLog(filePath string, pattern string, contextLines int) {
 
 	newPos, _ := file.Seek(0, io.SeekCurrent)
 	filePositions[filePath] = newPos
+}
+
+func newestLogFile(dir string) (string, error) {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		return "", err
+	}
+
+	var newestFile string
+	var newestTime time.Time
+
+	for _, f := range files {
+		if f.IsDir() {
+			continue
+		}
+		if strings.HasSuffix(f.Name(), ".log") {
+			info, err := f.Info()
+			if err != nil {
+				continue
+			}
+			if info.ModTime().After(newestTime) {
+				newestTime = info.ModTime()
+				newestFile = filepath.Join(dir, f.Name())
+			}
+		}
+	}
+
+	if newestFile == "" {
+		return "", fmt.Errorf("no .log files found in %s", dir)
+	}
+	return newestFile, nil
 }
 
 // Hjelpefunksjon for å finne startposisjon slik at vi får ca N siste linjer

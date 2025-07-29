@@ -28,6 +28,7 @@
     <br>
     <button onclick="saveConfig()">Save Config</button>
     <button onclick="clearConfig()">Clear Config</button>
+    <a href="javascript:void(loadLogs())">Reload</a>
   </div>
 
   <hr>
@@ -88,7 +89,7 @@
 
     // Initial load + refresh hvert 15. sekund
     loadLogs();
-    setInterval(loadLogs, 15000);
+    setInterval(loadLogs, 120 * 1000);
   </script>
 </body>
 </html>

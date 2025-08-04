@@ -30,6 +30,10 @@
       color: #555;
     }
 
+    .retained {
+      background-color: darkslategrey;
+    }
+
     .log-timestamp {
       color: #7490a4;
       font-weight: bold;
@@ -149,7 +153,7 @@
           const isRetained = retained.some((r) => r.id === id);
 
           logDiv.innerHTML = `
-            <div class="log-meta">
+            <div class="log-meta ${isRetained ? "retained" : ""}">
               <span class="log-timestamp">[${l.timestamp}]</span>
               <span class="log-host">${l.hostname}</span>
               <span class="log-file">${l.filename}</span>

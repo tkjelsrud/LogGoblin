@@ -6,13 +6,48 @@
   <style>
     body { font-family: monospace; background: #111; color: #eee; }
     input { margin: 5px; }
-    pre { 
-      background: #222; 
-      padding: 10px; 
-      max-height: 70vh; 
-      overflow-y: scroll; 
-      white-space: pre-wrap;   /* linjer brytes */
-      word-wrap: break-word;   /* ekstra sikkerhet */
+
+    #log {
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .log-entry {
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 8px 12px;
+      background: #fdfdfd;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+
+    .log-meta {
+      font-size: 0.85em;
+      margin-bottom: 4px;
+      display: flex;
+      gap: 8px;
+      color: #555;
+    }
+
+    .log-timestamp {
+      color: #0077cc;
+      font-weight: bold;
+    }
+
+    .log-host {
+      color: #84dcef;
+    }
+
+    .log-file {
+      color: #e4a15d;
+      font-style: italic;
+    }
+
+    .log-message {
+      font-family: monospace;
+      white-space: pre-wrap; /* bevarer linebreaks */
+      color: #f0f0f0;
     }
   </style>
 </head>
@@ -33,7 +68,7 @@
 
   <hr>
 
-  <pre id="log">Loading logs...</pre>
+  <div id="log">Loading logs...</div>
 
   <script>
     function saveConfig() {
@@ -81,11 +116,27 @@
         // Nyeste først
         const reversed = logs.slice().reverse();
 
-        document.getElementById("log").textContent = reversed
-          .map(l => `[${l.timestamp}] ${l.hostname} ${l.filename}: ${l.message}`)
-          .join("\n\n");
+        const container = document.getElementById("log");
+        container.innerHTML = ""; // tøm gammel output
+
+        reversed.forEach(l => {
+          const logDiv = document.createElement("div");
+          logDiv.className = "log-entry";
+
+          logDiv.innerHTML = `
+            <div class="log-meta">
+              <span class="log-timestamp">[${l.timestamp}]</span>
+              <span class="log-host">${l.hostname}</span>
+              <span class="log-file">${l.filename}</span>
+            </div>
+            <div class="log-message">${l.message}</div>
+          `;
+
+          container.appendChild(logDiv);
+        });
+
       } catch (e) {
-        document.getElementById("log").textContent = "Error fetching logs: " + e.message;
+        document.getElementById("log").innerHTML = "<p>Error fetching logs: " + e.message + "</p>";
       }
     }
 

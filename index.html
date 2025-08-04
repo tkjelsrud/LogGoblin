@@ -146,14 +146,13 @@
 
         reversed.forEach(l => {
           const logDiv = document.createElement("div");
-          logDiv.className = "log-entry";
-
           const id = `${l.timestamp}-${l.hostname}-${l.filename}`;
-
           const isRetained = retained.some((r) => r.id === id);
 
+          logDiv.className = `log-entry ${isRetained ? "retained" : ""}`;
+
           logDiv.innerHTML = `
-            <div class="log-meta ${isRetained ? "retained" : ""}">
+            <div class="log-meta">
               <span class="log-timestamp">[${l.timestamp}]</span>
               <span class="log-host">${l.hostname}</span>
               <span class="log-file">${l.filename}</span>

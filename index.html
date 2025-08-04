@@ -82,7 +82,7 @@
         const reversed = logs.slice().reverse();
 
         document.getElementById("log").textContent = reversed
-          .map(l => `[${l.timestamp}] ${l.filename}: ${l.message}`)
+          .map(l => `[${l.timestamp}] ${l.hostname} ${l.filename}: ${l.message}`)
           .join("\n\n");
       } catch (e) {
         document.getElementById("log").textContent = "Error fetching logs: " + e.message;

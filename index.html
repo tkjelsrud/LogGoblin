@@ -19,7 +19,7 @@
 <body>
   <h1>Log Viewer</h1>
 
-  <div>
+  <div id="config">
     <label>Bucket ID:</label>
     <input type="text" id="bucketID" placeholder="Enter JSONbin bucket ID">
     <br>
@@ -56,6 +56,8 @@
         document.getElementById("log").textContent = "Please enter and save Bucket ID and Access Key.";
         return;
       }
+
+      document.getElementById("config").style.visibility = false;
 
       try {
         const res = await fetch(`https://api.jsonbin.io/v3/b/${bucketID}/latest`, {

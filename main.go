@@ -3,7 +3,10 @@ package main
 import (
 	"bufio"
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"net/http"
@@ -42,6 +45,9 @@ var (
 	logQueue      []LogEntry               // Store logs before sending
 	queueMutex    sync.Mutex
 	jsonBinURL    = "https://api.jsonbin.io/v3/b/%s"
+	seen          = make(map[string]bool)
+	msgSent       = 0
+	msgMax        = 100
 )
 
 const (
@@ -49,12 +55,29 @@ const (
 	batchInterval = 30 * time.Second // Send logs every 30 seconds
 )
 
+var debug = flag.Bool("debug", false, "Enable debug")
+
 func main() {
 	// Load configuration
-	err := loadConfig()
-	if err != nil {
-		fmt.Println("Error loading config:", err)
-		return
+	loadConfig()
+	/*if err != nil {
+		fmt.Println("Did not load config:", err)
+	}*/
+
+	pattern := flag.String("r", "", "Regex pattern to search for")
+	logFile := flag.String("f", "", "Log file to scan")
+	logDir := flag.String("d", "", "Log directiory to scan")
+
+	flag.Parse()
+
+	if *pattern != "" {
+		config.MatchPattern = *pattern
+	}
+	if *logFile != "" {
+		config.LogFiles = []string{*logFile}
+	}
+	if *logDir != "" {
+		config.LogDirs = []string{*logDir}
 	}
 
 	go batchSender() // sender til JSONBin i bakgrunnen
@@ -116,7 +139,9 @@ func processLog(filePath string, pattern string, contextLines int) {
 	}
 
 	lastPos, exists := filePositions[filePath]
-	fmt.Printf("%v %v, lastPos=%d\n", filePath, exists, lastPos)
+	if *debug {
+		fmt.Printf("%v %v, lastPos=%d\n", filePath, exists, lastPos)
+	}
 
 	fileInfo, err := file.Stat()
 	if err != nil {
@@ -131,7 +156,9 @@ func processLog(filePath string, pattern string, contextLines int) {
 
 	if !exists || lastPos == 0 {
 		lastPos = findLastNLinesOffset(file, 100)
-		fmt.Printf("First read: jumping to last 100 lines (offset %d)\n", lastPos)
+		if *debug {
+			fmt.Printf("First read: jumping to last 100 lines (offset %d)\n", lastPos)
+		}
 	}
 
 	_, err = file.Seek(lastPos, io.SeekStart)
@@ -153,6 +180,22 @@ func processLog(filePath string, pattern string, contextLines int) {
 		}
 
 		if errorPattern.MatchString(line) {
+			hash := hashMessage(line)
+
+			for _, logMsg := range seen {
+				if seen[hash] {
+					if *debug {
+						fmt.Println("Duplicate detected:", logMsg)
+					}
+					return
+				} else {
+					seen[hash] = true
+					if *debug {
+						fmt.Println("New log:", logMsg)
+					}
+				}
+			}
+
 			var buffer bytes.Buffer
 			buffer.WriteString(line)
 
@@ -173,7 +216,10 @@ func processLog(filePath string, pattern string, contextLines int) {
 			queueMutex.Lock()
 			logQueue = append(logQueue, logEntry)
 			queueMutex.Unlock()
-			fmt.Printf("Matched: %s", line) // Debug
+
+			if *debug {
+				fmt.Printf("Matched: %s", line) // Debug
+			}
 		}
 	}
 
@@ -341,4 +387,24 @@ func sendToJSONBin(entries []LogEntry) {
 	defer resp.Body.Close()
 
 	fmt.Printf("Updated JSONBin with %d new entries. HTTP Status: %s\n", len(entries), resp.Status)
+	msgSent++
+
+	if msgSent == msgMax {
+		fmt.Printf("Reached message sending limit: %d - aborting application", msgMax)
+		os.Exit(0)
+	}
+}
+
+func normalizeLog(msg string) string {
+	// Compile regex to match all digits
+	re := regexp.MustCompile(`\d+`)
+	// Replace all digit sequences with empty string
+	clean := re.ReplaceAllString(msg, "")
+	return clean
+}
+
+func hashMessage(msg string) string {
+	normalized := normalizeLog(msg)
+	hash := sha256.Sum256([]byte(normalized))
+	return hex.EncodeToString(hash[:])
 }

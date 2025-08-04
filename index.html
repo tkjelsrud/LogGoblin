@@ -133,18 +133,42 @@
         const container = document.getElementById("log");
         container.innerHTML = ""; // tøm gammel output
 
+        const retained = JSON.parse(localStorage.getItem("retainedLogs") || "[]");
+
         reversed.forEach(l => {
           const logDiv = document.createElement("div");
           logDiv.className = "log-entry";
+
+          const id = `${l.timestamp}-${l.hostname}-${l.filename}`;
+
+          const isRetained = retained.some((r) => r.id === id);
 
           logDiv.innerHTML = `
             <div class="log-meta">
               <span class="log-timestamp">[${l.timestamp}]</span>
               <span class="log-host">${l.hostname}</span>
               <span class="log-file">${l.filename}</span>
+              <button class="retain-btn">${isRetained ? "Unretain" : "Retain"}</button>
             </div>
             <div class="log-message">${l.message}</div>
           `;
+
+          const btn = logDiv.querySelector(".retain-btn");
+          btn.addEventListener("click", () => {
+            const retainedNow = JSON.parse(localStorage.getItem("retainedLogs") || "[]");
+
+            if (isRetained) {
+              // remove
+              const updated = retainedNow.filter((r) => r.id !== id);
+              localStorage.setItem("retainedLogs", JSON.stringify(updated));
+              btn.textContent = "Retain";
+            } else {
+              // add
+              retainedNow.push({ id, ...l });
+              localStorage.setItem("retainedLogs", JSON.stringify(retainedNow));
+              btn.textContent = "Unretain";
+            }
+          });
 
           container.appendChild(logDiv);
         });

@@ -57,7 +57,7 @@
         return;
       }
 
-      document.getElementById("config").style.visibility = false;
+      document.getElementById("config").style.display = 'none';
 
       try {
         const res = await fetch(`https://api.jsonbin.io/v3/b/${bucketID}/latest`, {

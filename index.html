@@ -83,6 +83,8 @@
       document.getElementById("log").textContent = "Configuration cleared.";
     }
 
+    let lastTimestamp = null;
+
     async function loadLogs() {
       const bucketID = localStorage.getItem("bucketID");
       const accessKey = localStorage.getItem("accessKey");
@@ -111,6 +113,13 @@
         if (!logs || logs.length === 0) {
           document.getElementById("log").textContent = "No logs found.";
           return;
+        }
+
+        const newest = logs[logs.length - 1]; // siste logg
+        if (!lastTimestamp || newest.timestamp !== lastTimestamp) {
+          // Ny melding!
+          showNotification(newest);
+          lastTimestamp = newest.timestamp;
         }
 
         // Nyeste først
@@ -143,6 +152,30 @@
     // Initial load + refresh hvert 15. sekund
     loadLogs();
     setInterval(loadLogs, 120 * 1000);
+
+    function showNotification(log) {
+      if (Notification.permission === "granted") {
+        new Notification("Ny loggmelding", {
+          body: `[${log.hostname}] ${log.message}`,
+          icon: "bell.png" // valgfritt ikon
+        });
+      }
+    }
+
+    async function requestNotificationPermission() {
+      if (!("Notification" in window)) {
+        alert("Denne nettleseren støtter ikke varslinger");
+        return;
+      }
+      const permission = await Notification.requestPermission();
+      if (permission !== "granted") {
+        alert("Varslinger ble ikke tillatt");
+      }
+      else {
+        document.getElementById("allowNotif").style.display = 'none';
+      }
+    }
   </script>
+  <button id="allowNotif" onclick="requestNotificationPermission()">Tillat varsler</button>
 </body>
 </html>

@@ -135,7 +135,10 @@
 
         const retained = JSON.parse(localStorage.getItem("retainedLogs") || "[]");
 
-        reversed.push(retained);
+        retained.forEach(r => {
+          reversed.push(r);
+        });
+        
 
         reversed.forEach(l => {
           const logDiv = document.createElement("div");

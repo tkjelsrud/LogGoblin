@@ -135,6 +135,8 @@
 
         const retained = JSON.parse(localStorage.getItem("retainedLogs") || "[]");
 
+        reversed.push(retained);
+
         reversed.forEach(l => {
           const logDiv = document.createElement("div");
           logDiv.className = "log-entry";

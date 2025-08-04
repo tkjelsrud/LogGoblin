@@ -29,6 +29,7 @@ type Config struct {
 	FindNewestInDirs  bool     `json:"findNewestInDirs"`
 	MatchPattern      string   `json:"matchPattern"`
 	ContextLines      int      `json:"contextLines"`
+	Hostname          string   `json:"hostname"`
 }
 
 // Log entry struct
@@ -36,6 +37,7 @@ type LogEntry struct {
 	Timestamp string `json:"timestamp"`
 	Message   string `json:"message"`
 	Filename  string `json:"filename"`
+	Hostname  string `json:"hostname"`
 }
 
 // Global variables
@@ -208,10 +210,17 @@ func processLog(filePath string, pattern string, contextLines int) {
 				buffer.WriteString(extraLine)
 			}
 
+			hostname, err := os.Hostname()
+
+			if err != nil {
+				hostname = config.Hostname
+			}
+
 			logEntry := LogEntry{
 				Timestamp: time.Now().Format(time.RFC3339),
 				Message:   buffer.String(),
 				Filename:  filePath,
+				Hostname:  hostname,
 			}
 			queueMutex.Lock()
 			logQueue = append(logQueue, logEntry)

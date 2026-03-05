@@ -1,9 +1,21 @@
 {
-    "jsonBinBucketID": "your-bucket-id-here",
-    "jsonBinAPIKey": "your-master-key-here",
-    "jsonBinAccessKey": "your-access-key-here",
-    "jsonBinVersioning": false,
-    "logFiles": [
-      "./test.log"
-    ]
-  }
+  "jsonBinBucketID": "REPLACE_ME_BUCKET_ID",
+  "jsonBinAPIKey": "REPLACE_ME_MASTER_KEY",
+  "jsonBinAccessKey": "REPLACE_ME_ACCESS_KEY",
+  "jsonBinVersioning": false,
+  "outputMode": "influx",
+  "influxURL": "https://influxdb.example.local",
+  "influxToken": "REPLACE_ME_INFLUX_TOKEN",
+  "influxOrg": "REPLACE_ME_INFLUX_ORG",
+  "influxBucket": "REPLACE_ME_INFLUX_BUCKET",
+  "influxInsecure": true,
+  "influxMeasurement": "loggoblin_events",
+  "logFiles": [],
+  "logDirs": [],
+  "findNewestInDirs": false,
+  "maxFilesPerDir": 3,
+  "matchPattern": "(?i)(FEIL|ERROR|\\[ERR\\])",
+  "ignorePatterns": [],
+  "contextLines": 5,
+  "hostname": ""
+}

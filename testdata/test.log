@@ -1,0 +1,8 @@
+10.10.10 INFO    hello world
+10.10.10 WARN    something here
+10.10.10 ERROR   error here
+10.10.10 INFO    hello :)
+10.10.10 ERROR   error here
+10.10.10 INFO    hello :)
+10.10.10 ERROR   error here
+10.10.10 INFO    hello :)2026-03-05T12:15:00Z ERROR forced test event
